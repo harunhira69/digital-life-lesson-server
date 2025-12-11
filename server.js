@@ -99,6 +99,104 @@ app.get("/lesson/:id", async (req, res) => {
   }
 });
 
+// add lesson
+app.post("/lessons", async (req, res) => {
+  try {
+    const { title, description, category, emotionalTone, imageUrl, privacy, accessLevel, email } = req.body;
+
+    const creator = await usersCollection.findOne({ email });
+    if (!creator) return res.status(404).send({ message: "User not found" });
+
+    if (creator.role !== "Premium" && accessLevel === "Premium") {
+      return res.status(403).send({ message: "Upgrade to Premium to create paid lessons" });
+    }
+
+    const newLesson = {
+      title,
+      description,
+      category,
+      emotionalTone,
+      imageUrl: imageUrl || "",
+      privacy,
+      accessLevel,
+      creatorEmail: email,
+      creatorName: creator.name || "Anonymous",
+      creatorPhotoUrl: creator.image || "",
+      visibility: privacy === "Public" ? "Public" : "Private",
+      viewsCount: 0,
+      createdDate: new Date(),
+    };
+
+    const result = await lessonCollection.insertOne(newLesson);
+
+    res.send({ insertedId: result.insertedId, lesson: newLesson });
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({ message: "Failed to add lesson", error: error.message });
+  }
+});
+
+
+// Get Lessons
+app.get("/my-lessons/:email", async (req, res) => {
+  try {
+    const { email } = req.params;
+    const lessons = await lessonCollection
+      .find({ creatorEmail: email })
+      .sort({ createdDate: -1 })
+      .toArray();
+    res.send(lessons);
+  } catch (error) {
+    res.status(500).send({ message: "Failed to fetch user lessons", error: error.message });
+  }
+});
+
+// Update Lessons
+app.patch("/lessons/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body; // title, description, category, emotionalTone, imageUrl, privacy, accessLevel, userRole
+
+    if (!ObjectId.isValid(id)) return res.status(400).send({ message: "Invalid ID" });
+
+    const lesson = await lessonCollection.findOne({ _id: new ObjectId(id) });
+    if (!lesson) return res.status(404).send({ message: "Lesson not found" });
+
+    // Premium restriction
+    if (updates.accessLevel === "Premium" && updates.userRole !== "Premium") {
+      return res.status(403).send({ message: "Upgrade to Premium to set Premium access" });
+    }
+
+    // Prevent updating creator info
+    delete updates.creatorName;
+    delete updates.creatorEmail;
+
+    await lessonCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { $set: updates }
+    );
+
+    res.send({ message: "Lesson updated successfully" });
+  } catch (error) {
+    res.status(500).send({ message: "Failed to update lesson", error: error.message });
+  }
+});
+
+// Delete Lessons
+
+app.delete("/lessons/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!ObjectId.isValid(id)) return res.status(400).send({ message: "Invalid ID" });
+
+    await lessonCollection.deleteOne({ _id: new ObjectId(id) });
+    res.send({ message: "Lesson deleted successfully" });
+  } catch (error) {
+    res.status(500).send({ message: "Failed to delete lesson", error: error.message });
+  }
+});
+
+
 
 
 // users api 
@@ -190,47 +288,52 @@ app.post('/checkout-session', async (req, res) => {
 
 
     // Verify Successful Payment
-    app.patch('/verify-success-payment', async (req, res) => {
-      try {
-        const { session_id } = req.query;
-        if (!session_id) return res.status(400).send({ error: "session_id missing" });
+ app.patch('/verify-success-payment', async (req, res) => {
+  try {
+    const sessionId = req.query.session_id;
 
-        const session = await stripe.checkout.sessions.retrieve(session_id);
-        console.log("Session retrieved:", session);
+    if (!sessionId) return res.status(400).send({ error: "session_id missing" });
 
-        if (session.payment_status === "paid") {
-          const email = session.metadata.email;
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
 
-          // ✅ Update user's role to Premium
-          const result = await usersCollection.updateOne(
-            { email },
-            { $set: { role: "Premium" } }
-          );
+    if (session.payment_status === "paid") {
+      const transactionId = session.payment_intent;
 
-          // ✅ Store payment info
-          const paymentRecord = {
-            email,
-            amount: session.amount_total / 100,
-            currency: session.currency,
-            paymentStatus: session.payment_status,
-            transactionId: session.payment_intent,
-            createdAt: new Date(),
-          };
-          const resultPayment = await paymentsCollection.insertOne(paymentRecord);
-
-          return res.send({
-            success: true,
-            updatedUser: result,
-            paymentInfo: resultPayment,
-          });
-        }
-
-        return res.send({ success: false });
-      } catch (error) {
-        console.error("Verify Payment Error:", error);
-        res.status(500).send({ error: error.message });
+      // ✅ Check if this transaction already exists
+      const existingPayment = await paymentCollection.findOne({ transactionId });
+      if (existingPayment) {
+        return res.send({
+          success: true,
+          message: "Payment already recorded",
+          transactionId: existingPayment.transactionId,
+        });
       }
-    });
+
+      const payment = {
+        email: session.customer_email,
+        amount: session.amount_total / 100,
+        currency: session.currency,
+        paymentStatus: session.payment_status,
+        transactionId,
+        createdAt: new Date(),
+      };
+
+      const resultPayment = await paymentCollection.insertOne(payment);
+
+      return res.send({
+        success: true,
+        paymentInfo: resultPayment,
+        transactionId,
+      });
+    }
+
+    return res.send({ success: false });
+  } catch (error) {
+    console.error("Verify Error:", error);
+    return res.status(500).send({ error: error.message });
+  }
+});
+
 
     // Get payment history
     app.get('/payment', async (req, res) => {
