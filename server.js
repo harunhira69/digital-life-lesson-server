@@ -111,21 +111,22 @@ app.post("/lessons", async (req, res) => {
       return res.status(403).send({ message: "Upgrade to Premium to create paid lessons" });
     }
 
-    const newLesson = {
-      title,
-      description,
-      category,
-      emotionalTone,
-      imageUrl: imageUrl || "",
-      privacy,
-      accessLevel,
-      creatorEmail: email,
-      creatorName: creator.name || "Anonymous",
-      creatorPhotoUrl: creator.image || "",
-      visibility: privacy === "Public" ? "Public" : "Private",
-      viewsCount: 0,
-      createdDate: new Date(),
-    };
+   const newLesson = {
+  title,
+  description,
+  category,
+  emotionalTone,
+  imageUrl: imageUrl || "",
+  privacy,
+  accessLevel,
+  creatorEmail: email,
+  creatorName: creator.name || "Anonymous",
+  creatorPhotoUrl: creator.image || "",
+  visibility: privacy === "Public" ? "Public" : "Private", // ✅ must be "Public"
+  viewsCount: 0,
+  createdDate: new Date(),
+};
+
 
     const result = await lessonCollection.insertOne(newLesson);
 
@@ -195,7 +196,7 @@ app.delete("/lessons/:id", async (req, res) => {
     res.status(500).send({ message: "Failed to delete lesson", error: error.message });
   }
 });
-
+-
 
 
 
@@ -300,7 +301,7 @@ app.post('/checkout-session', async (req, res) => {
       const transactionId = session.payment_intent;
 
       // ✅ Check if this transaction already exists
-      const existingPayment = await paymentCollection.findOne({ transactionId });
+      const existingPayment = await paymentsCollection.findOne({ transactionId });
       if (existingPayment) {
         return res.send({
           success: true,
