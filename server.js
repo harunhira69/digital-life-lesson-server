@@ -41,6 +41,8 @@ async function run() {
     const lessonCollection = database.collection('public_lesson');
     const usersCollection = database.collection('users');
       const paymentsCollection = database.collection('payments');
+      const favoritesCollection = database.collection("favorites");
+
 
 
 app.get('/public-lessons', async (req, res) => {
@@ -255,6 +257,26 @@ app.get("/users/role/:email", async (req, res) => {
   }
 });
 
+// admin
+const verifyAdmin = async (req, res, next) => {
+  try {
+    const email = req.query.email || req.body.email; // JWT token থেকেও নেওয়া যায়
+    if (!email) return res.status(401).send({ message: "Email required" });
+
+    const user = await usersCollection.findOne({ email });
+    if (!user || user.role !== "admin") {
+      return res.status(403).send({ message: "Access denied, not an admin" });
+    }
+
+    req.user = user; // পরবর্তী route এ admin info ব্যবহার করা যাবে
+    next();
+  } catch (error) {
+    res.status(500).send({ message: "Admin verification failed", error: error.message });
+  }
+};
+
+
+
 app.post('/checkout-session', async (req, res) => {
   try {
     const { email, cost = 1500 } = req.body;
@@ -349,6 +371,196 @@ app.post('/checkout-session', async (req, res) => {
         res.status(500).send({ error: error.message });
       }
     });
+
+
+
+    // Favourite api
+    app.get("/favorites", async (req, res) => {
+  try {
+    const email = req.query.email;
+    if (!email) {
+      return res.status(400).send({ message: "Email required" });
+    }
+
+    const favorites = await favoritesCollection
+      .find({ userEmail: email })
+      .toArray();
+
+    res.send(favorites);
+  } catch (error) {
+    res.status(500).send({
+      message: "Failed to get favorites",
+      error: error.message,
+    });
+  }
+});
+
+// add favourite
+app.post("/favorites", async (req, res) => {
+  try {
+    const { lessonId, userEmail } = req.body;
+
+    if (!lessonId || !userEmail) {
+      return res.status(400).send({ message: "lessonId & userEmail required" });
+    }
+
+    const lesson = await lessonCollection.findOne({
+      _id: new ObjectId(lessonId),
+    });
+
+    if (!lesson) {
+      return res.status(404).send({ message: "Lesson not found" });
+    }
+
+    // ❌ Prevent duplicate favorites
+    const alreadySaved = await favoritesCollection.findOne({
+      lessonId,
+      userEmail,
+    });
+
+    if (alreadySaved) {
+      return res.send({ message: "Already in favorites" });
+    }
+
+    const favoriteDoc = {
+      lessonId,
+      userEmail,
+      title: lesson.title,
+      category: lesson.category,
+      emotionalTone: lesson.emotionalTone,
+      accessLevel: lesson.accessLevel,
+      createdAt: new Date(),
+    };
+
+    await favoritesCollection.insertOne(favoriteDoc);
+
+    res.send({ message: "Added to favorites" });
+  } catch (error) {
+    res.status(500).send({
+      message: "Failed to add favorite",
+      error: error.message,
+    });
+  }
+});
+
+// delete favorite
+app.delete("/favorites/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).send({ message: "Invalid favorite id" });
+    }
+
+    await favoritesCollection.deleteOne({ _id: new ObjectId(id) });
+
+    res.send({ message: "Removed from favorites" });
+  } catch (error) {
+    res.status(500).send({
+      message: "Failed to remove favorite",
+      error: error.message,
+    });
+  }
+});
+
+// dashboard api
+// GET dashboard stats
+app.get("/dashboard-stats", async (req, res) => {
+  try {
+    const email = req.query.email;
+    if (!email) return res.status(400).send({ message: "Email required" });
+
+    const totalLessons = await lessonCollection.countDocuments({ creatorEmail: email });
+    const publicLessons = await lessonCollection.countDocuments({ creatorEmail: email, visibility: "Public" });
+    const favorites = await favoritesCollection.countDocuments({ userEmail: email });
+
+    res.send({ totalLessons, publicLessons, favorites });
+  } catch (error) {
+    res.status(500).send({ message: error.message });
+  }
+});
+
+
+// admin dashboard
+app.get("/dashboard/admin/stats", verifyAdmin, async (req, res) => {
+  try {
+    const totalUsers = await usersCollection.countDocuments();
+    const totalPublicLessons = await lessonCollection.countDocuments({ visibility: "Public" });
+    const flaggedLessons = await lessonCollection.countDocuments({ flagged: true });
+
+    res.send({ totalUsers, totalPublicLessons, flaggedLessons });
+  } catch (error) {
+    res.status(500).send({ message: "Failed to fetch admin stats", error: error.message });
+  }
+});
+
+
+// manage user admin
+// Get all users
+app.get("/dashboard/admin/manage-users", verifyAdmin, async (req, res) => {
+  try {
+    const users = await usersCollection.find().toArray();
+    res.send(users);
+  } catch (error) {
+    res.status(500).send({ message: error.message });
+  }
+});
+
+// Update user role
+app.patch("/dashboard/admin/users/:id/role", verifyAdmin, async (req, res) => {
+  try {
+    const { role } = req.body; // "user" or "admin"
+    const { id } = req.params;
+
+    if (!ObjectId.isValid(id)) return res.status(400).send({ message: "Invalid user ID" });
+
+    await usersCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { $set: { role } }
+    );
+
+    res.send({ message: "User role updated successfully" });
+  } catch (error) {
+    res.status(500).send({ message: error.message });
+  }
+});
+
+// manage lesson admin
+app.get("/dashboard/admin/manage-lessons", verifyAdmin, async (req, res) => {
+  try {
+    const lessons = await lessonCollection.find().toArray();
+    res.send(lessons);
+  } catch (error) {
+    res.status(500).send({ message: error.message });
+  }
+});
+
+// Delete lesson (admin)
+app.delete("/dashboard/admin/lessons/:id", verifyAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!ObjectId.isValid(id)) return res.status(400).send({ message: "Invalid lesson ID" });
+
+    await lessonCollection.deleteOne({ _id: new ObjectId(id) });
+    res.send({ message: "Lesson deleted successfully" });
+  } catch (error) {
+    res.status(500).send({ message: error.message });
+  }
+});
+
+// report
+app.get("/dashboard/admin/reported-lessons", verifyAdmin, async (req, res) => {
+  try {
+    const reportedLessons = await lessonCollection.find({ flagged: true }).toArray();
+    res.send(reportedLessons);
+  } catch (error) {
+    res.status(500).send({ message: error.message });
+  }
+});
+
+
+
+
 
 
 
