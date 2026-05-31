@@ -43,6 +43,85 @@ const deleteLesson = async (id) => {
     _id: new ObjectId(id),
   });
 };
+const getLessonsByEmail = async (
+  email
+) => {
+  return await lessonCollection()
+    .find({
+      creatorEmail: email,
+    })
+    .sort({
+      createdDate: -1,
+    })
+    .toArray();
+};
+
+const toggleLike = async (
+  lessonId,
+  userEmail
+) => {
+  const lesson =
+    await lessonCollection().findOne({
+      _id: new ObjectId(lessonId),
+    });
+
+  if (!lesson) return null;
+
+  const likes = lesson.likes || [];
+
+  const alreadyLiked =
+    likes.includes(userEmail);
+
+  if (alreadyLiked) {
+    return await lessonCollection().updateOne(
+      {
+        _id: new ObjectId(lessonId),
+      },
+      {
+        $pull: {
+          likes: userEmail,
+        },
+        $inc: {
+          likesCount: -1,
+        },
+      }
+    );
+  }
+
+  return await lessonCollection().updateOne(
+    {
+      _id: new ObjectId(lessonId),
+    },
+    {
+      $addToSet: {
+        likes: userEmail,
+      },
+      $inc: {
+        likesCount: 1,
+      },
+    }
+  );
+};
+
+const getSimilarLessons = async (
+  category,
+  emotionalTone,
+  currentId
+) => {
+  return await lessonCollection()
+    .find({
+      _id: {
+        $ne: new ObjectId(currentId),
+      },
+      visibility: "Public",
+      $or: [
+        { category },
+        { emotionalTone },
+      ],
+    })
+    .limit(6)
+    .toArray();
+};
 
 module.exports = {
   getPublicLessons,
@@ -51,4 +130,7 @@ module.exports = {
   createLesson,
   updateLesson,
   deleteLesson,
+  getLessonsByEmail,
+toggleLike,
+getSimilarLessons,
 };

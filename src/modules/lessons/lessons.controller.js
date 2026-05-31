@@ -1,3 +1,4 @@
+const userService = require("../users/user.service");
 const lessonService = require("./lessons.service");
 
 const getPublicLessons = async (req, res) => {
@@ -103,8 +104,25 @@ const getLessonById = async (req, res) => {
 
 const createLesson = async (req, res) => {
   try {
+    const user =
+      await userService.findUserByEmail(
+        req.user.email
+      );
+
+    if (
+      req.body.accessLevel === "Premium" &&
+      !user?.isPremium
+    ) {
+      return res.status(403).send({
+        message:
+          "Upgrade to Premium first",
+      });
+    }
+
     const lesson = {
       ...req.body,
+      creatorEmail: req.user.email,
+      likes: [],
       likesCount: 0,
       savesCount: 0,
       viewsCount: 0,
@@ -158,6 +176,67 @@ const deleteLesson = async (req, res) => {
     });
   }
 };
+const getMyLessons = async (
+  req,
+  res
+) => {
+  try {
+    const result =
+      await lessonService.getLessonsByEmail(
+        req.user.email
+      );
+
+    res.send(result);
+  } catch (error) {
+    res.status(500).send({
+      message: error.message,
+    });
+  }
+};
+
+const likeLesson = async (
+  req,
+  res
+) => {
+  try {
+    const result =
+      await lessonService.toggleLike(
+        req.params.id,
+        req.user.email
+      );
+
+    res.send(result);
+  } catch (error) {
+    res.status(500).send({
+      message: error.message,
+    });
+  }
+};
+
+const getSimilarLessons = async (
+  req,
+  res
+) => {
+  try {
+    const lesson =
+      await lessonService.getLessonById(
+        req.params.id
+      );
+
+    const result =
+      await lessonService.getSimilarLessons(
+        lesson.category,
+        lesson.emotionalTone,
+        lesson._id
+      );
+
+    res.send(result);
+  } catch (error) {
+    res.status(500).send({
+      message: error.message,
+    });
+  }
+};
 
 module.exports = {
   getPublicLessons,
@@ -165,4 +244,7 @@ module.exports = {
   createLesson,
   updateLesson,
   deleteLesson,
+  getMyLessons,
+likeLesson,
+getSimilarLessons,
 };

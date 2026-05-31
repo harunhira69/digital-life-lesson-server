@@ -1,13 +1,13 @@
 const express = require("express");
 
 const router = express.Router();
-
+const verifyToken = require("../../middleware/verifyToken");
 const paymentController = require(
   "./payments.controller"
 );
 
 router.post(
-  "/checkout-session",
+  "/checkout-session",verifyToken,
   paymentController.createCheckoutSession
 );
 

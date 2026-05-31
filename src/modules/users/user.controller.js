@@ -16,12 +16,12 @@ const createUser = async (req, res) => {
       });
     }
 
-    const newUser = {
-      ...user,
-      role: "Free",
-      isPremium: false,
-      createdAt: new Date(),
-    };
+  const newUser = {
+  ...user,
+  role: "user",
+  isPremium: false,
+  createdAt: new Date(),
+};
 
     const result =
       await userService.createUser(
@@ -52,7 +52,7 @@ const getUserRole = async (
       );
 
     res.send({
-      role: user?.role || "Free",
+      role: user?.role || "user",
       isPremium:
         user?.isPremium || false,
     });

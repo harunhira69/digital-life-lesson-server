@@ -59,7 +59,6 @@ const upgradeUserToPremium = async (email) => {
     { email },
     {
       $set: {
-        role: "Premium",
         isPremium: true,
         premiumSince: new Date(),
       },

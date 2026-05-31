@@ -3,27 +3,28 @@ const router = express.Router();
 
 const adminController = require("./admin.controller");
 const verifyAdmin = require("./admin.middleware");
+const verifyToken = require("../../middleware/verifyToken");
 
 // ================= STATS =================
-router.get("/stats", verifyAdmin, adminController.getStats);
+router.get("/stats", verifyToken, verifyAdmin, adminController.getStats);
 
 // ================= USERS =================
-router.get("/manage-users", verifyAdmin, adminController.getUsers);
-router.patch("/users/:id/role", verifyAdmin, adminController.updateUserRole);
-router.delete("/users/:id", verifyAdmin, adminController.deleteUser);
+router.get("/manage-users",verifyToken, verifyAdmin, adminController.getUsers);
+router.patch("/users/:id/role",verifyToken, verifyAdmin, adminController.updateUserRole);
+router.delete("/users/:id",verifyToken, verifyAdmin, adminController.deleteUser);
 
 // ================= LESSONS =================
-router.get("/manage-lessons", verifyAdmin, adminController.getLessons);
-router.patch("/lessons/:id/featured", verifyAdmin, adminController.toggleFeatured);
-router.patch("/lessons/:id/reviewed", verifyAdmin, adminController.markReviewed);
-router.delete("/lessons/:id", verifyAdmin, adminController.deleteLesson);
+router.get("/manage-lessons",verifyToken, verifyAdmin, adminController.getLessons);
+router.patch("/lessons/:id/featured",verifyToken, verifyAdmin, adminController.toggleFeatured);
+router.patch("/lessons/:id/reviewed",verifyToken, verifyAdmin, adminController.markReviewed);
+router.delete("/lessons/:id",verifyToken, verifyAdmin, adminController.deleteLesson);
 
 // ================= REPORTS =================
-router.get("/reported-lessons", verifyAdmin, adminController.getReportedLessons);
-router.patch("/lessons/:id/unflag", verifyAdmin, adminController.unflagLesson);
+router.get("/reported-lessons", verifyToken,verifyAdmin, adminController.getReportedLessons);
+router.patch("/lessons/:id/unflag",verifyToken, verifyAdmin, adminController.unflagLesson);
 
 // ================= PROFILE =================
-router.get("/profile", verifyAdmin, adminController.getProfile);
-router.patch("/profile", verifyAdmin, adminController.updateProfile);
+router.get("/profile",verifyToken, verifyAdmin, adminController.getProfile);
+router.patch("/profile",verifyToken, verifyAdmin, adminController.updateProfile);
 
 module.exports = router;
