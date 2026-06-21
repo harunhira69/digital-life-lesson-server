@@ -1,8 +1,12 @@
+require("dotenv").config();
+
 const { MongoClient, ServerApiVersion } = require("mongodb");
 
 const uri = process.env.MONGODB_URI;
+
 if (!uri) {
-  throw new Error("MONGODB_URI is not defined in .env");
+  console.error("MONGODB_URI is missing from .env file ❌");
+  process.exit(1);
 }
 
 const client = new MongoClient(uri, {
@@ -11,21 +15,23 @@ const client = new MongoClient(uri, {
     strict: true,
     deprecationErrors: true,
   },
-  tls: true,
 });
 
 const connectDB = async () => {
   try {
     await client.connect();
     await client.db("admin").command({ ping: 1 });
-    console.log("MongoDB Connected ✅");
+    console.log("MongoDB Connected Successfully ✅");
   } catch (error) {
     console.error("MongoDB Connection Failed ❌", error.message);
     process.exit(1);
   }
 };
 
+const db = client.db("digital_life_lesson");
+
 module.exports = {
-  connectDB,
   client,
+  db,
+  connectDB,
 };

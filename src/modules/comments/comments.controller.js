@@ -4,10 +4,7 @@ const getComments = async (req, res) => {
   try {
     const { lessonId } = req.params;
 
-    const result =
-      await commentService.getComments(
-        lessonId
-      );
+    const result = await commentService.getComments(lessonId);
 
     res.send(result);
   } catch (error) {
@@ -25,25 +22,34 @@ const addComment = async (req, res) => {
       userName,
       userPhoto,
       text,
+      comment,
     } = req.body;
 
-    const comment = {
+    const finalText = text || comment;
+
+    if (!lessonId || !userEmail || !finalText?.trim()) {
+      return res.status(400).send({
+        message: "lessonId, userEmail and text/comment are required",
+      });
+    }
+
+    const newComment = {
       lessonId,
       userEmail,
       userName: userName || "Anonymous",
       userPhoto: userPhoto || "",
-      text: text.trim(),
+      text: finalText.trim(),
       createdAt: new Date(),
     };
 
-    const result =
-      await commentService.createComment(
-        comment
-      );
+    const result = await commentService.createComment(newComment);
 
     res.send({
       insertedId: result.insertedId,
-      comment,
+      comment: {
+        _id: result.insertedId,
+        ...newComment,
+      },
     });
   } catch (error) {
     res.status(500).send({
@@ -52,17 +58,11 @@ const addComment = async (req, res) => {
   }
 };
 
-const removeComment = async (
-  req,
-  res
-) => {
+const removeComment = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const result =
-      await commentService.deleteComment(
-        id
-      );
+    const result = await commentService.deleteComment(id);
 
     res.send(result);
   } catch (error) {
@@ -72,17 +72,11 @@ const removeComment = async (
   }
 };
 
-const getCommentCount = async (
-  req,
-  res
-) => {
+const getCommentCount = async (req, res) => {
   try {
     const { lessonId } = req.params;
 
-    const count =
-      await commentService.countComments(
-        lessonId
-      );
+    const count = await commentService.countComments(lessonId);
 
     res.send({ count });
   } catch (error) {

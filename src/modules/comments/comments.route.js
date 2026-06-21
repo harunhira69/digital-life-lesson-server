@@ -1,29 +1,14 @@
 const express = require("express");
-
 const router = express.Router();
 
-const commentController = require(
-  "./comments.controller"
-);
+const commentController = require("./comments.controller");
 
-router.get(
-  "/:lessonId",
-  commentController.getComments
-);
+router.get("/count/:lessonId", commentController.getCommentCount);
 
-router.post(
-  "/",
-  commentController.addComment
-);
+router.get("/:lessonId", commentController.getComments);
 
-router.delete(
-  "/:id",
-  commentController.removeComment
-);
+router.post("/", commentController.addComment);
 
-router.get(
-  "/count/:lessonId",
-  commentController.getCommentCount
-);
+router.delete("/:id", commentController.removeComment);
 
 module.exports = router;

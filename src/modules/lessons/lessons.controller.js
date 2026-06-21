@@ -1,4 +1,3 @@
-const userService = require("../users/user.service");
 const lessonService = require("./lessons.service");
 
 const getPublicLessons = async (req, res) => {
@@ -13,80 +12,54 @@ const getPublicLessons = async (req, res) => {
       limit = 9,
     } = req.query;
 
-    const query = {
-      visibility: "Public",
-    };
+    const query = { visibility: "Public" };
 
-    if (category) query.category = category;
-    if (emotionalTone) query.emotionalTone = emotionalTone;
-    if (accessLevel) query.accessLevel = accessLevel;
+    if (category && category !== "All") query.category = category;
+    if (emotionalTone && emotionalTone !== "All") query.emotionalTone = emotionalTone;
+    if (accessLevel && accessLevel !== "All") query.accessLevel = accessLevel;
 
     if (search) {
       query.$or = [
-        {
-          title: {
-            $regex: search,
-            $options: "i",
-          },
-        },
-        {
-          description: {
-            $regex: search,
-            $options: "i",
-          },
-        },
+        { title: { $regex: search, $options: "i" } },
+        { description: { $regex: search, $options: "i" } },
       ];
     }
 
-    let sortOption = {
-      createdDate: -1,
-    };
+    let sortOption = { createdDate: -1 };
 
-    if (sort === "oldest") {
-      sortOption = { createdDate: 1 };
+    if (sort === "oldest") sortOption = { createdDate: 1 };
+    if (sort === "mostLiked") sortOption = { likesCount: -1 };
+    if (sort === "mostSaved") {
+      sortOption = {
+        favoritesCount: -1,
+        savesCount: -1,
+      };
     }
 
-    if (sort === "mostLiked") {
-      sortOption = { likesCount: -1 };
-    }
+    const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    const skip =
-      (parseInt(page) - 1) * parseInt(limit);
+    const lessons = await lessonService.getPublicLessons(query, {
+      sort: sortOption,
+      skip,
+      limit: parseInt(limit),
+    });
 
-    const lessons =
-      await lessonService.getPublicLessons(
-        query,
-        {
-          sort: sortOption,
-          skip,
-          limit: parseInt(limit),
-        }
-      );
-
-    const total =
-      await lessonService.countLessons(query);
+    const total = await lessonService.countLessons(query);
 
     res.send({
       lessons,
       total,
       page: parseInt(page),
-      totalPages: Math.ceil(
-        total / parseInt(limit)
-      ),
+      totalPages: Math.ceil(total / parseInt(limit)),
     });
   } catch (error) {
-    res.status(500).send({
-      message: error.message,
-    });
+    res.status(500).send({ message: error.message });
   }
 };
 
 const getLessonById = async (req, res) => {
   try {
-    const lesson =
-      await lessonService.getLessonById(
-        req.params.id
-      );
+    const lesson = await lessonService.getLessonById(req.params.id);
 
     if (!lesson) {
       return res.status(404).send({
@@ -96,145 +69,155 @@ const getLessonById = async (req, res) => {
 
     res.send(lesson);
   } catch (error) {
-    res.status(500).send({
-      message: error.message,
-    });
+    res.status(500).send({ message: error.message });
   }
 };
 
 const createLesson = async (req, res) => {
   try {
-    const user =
-      await userService.findUserByEmail(
-        req.user.email
-      );
+    const creatorEmail = req.body.creatorEmail || req.body.email;
 
-    if (
-      req.body.accessLevel === "Premium" &&
-      !user?.isPremium
-    ) {
+    if (!creatorEmail) {
+      return res.status(400).send({
+        message: "creatorEmail or email is required",
+      });
+    }
+
+    const dbUser = await lessonService.findUserByEmail(creatorEmail);
+
+    if (req.body.accessLevel === "Premium" && !dbUser?.isPremium && dbUser?.role !== "Premium") {
       return res.status(403).send({
-        message:
-          "Upgrade to Premium first",
+        message: "Only premium users can create premium lessons",
       });
     }
 
     const lesson = {
       ...req.body,
-      creatorEmail: req.user.email,
+      creatorEmail,
+      creatorName: req.body.creatorName || dbUser?.name || "Anonymous",
+      creatorPhotoUrl:
+        req.body.creatorPhotoUrl || req.body.image || dbUser?.image || "",
       likes: [],
       likesCount: 0,
-      savesCount: 0,
-      viewsCount: 0,
+      savesCount: req.body.savesCount || 0,
+      favoritesCount: req.body.favoritesCount || 0,
+      viewsCount: req.body.viewsCount || Math.floor(Math.random() * 10000),
+      reportCount: 0,
+      flagged: false,
       createdDate: new Date(),
       updatedDate: new Date(),
     };
 
-    const result =
-      await lessonService.createLesson(
-        lesson
-      );
+    const result = await lessonService.createLesson(lesson);
 
     res.send(result);
   } catch (error) {
-    res.status(500).send({
-      message: error.message,
-    });
+    res.status(500).send({ message: error.message });
   }
 };
 
 const updateLesson = async (req, res) => {
   try {
-    const result =
-      await lessonService.updateLesson(
-        req.params.id,
-        {
-          ...req.body,
-          updatedDate: new Date(),
-        }
-      );
+    const result = await lessonService.updateLesson(req.params.id, {
+      ...req.body,
+      updatedDate: new Date(),
+    });
 
     res.send(result);
   } catch (error) {
-    res.status(500).send({
-      message: error.message,
-    });
+    res.status(500).send({ message: error.message });
   }
 };
 
 const deleteLesson = async (req, res) => {
   try {
-    const result =
-      await lessonService.deleteLesson(
-        req.params.id
-      );
+    const result = await lessonService.deleteLesson(req.params.id);
 
     res.send(result);
   } catch (error) {
-    res.status(500).send({
-      message: error.message,
-    });
-  }
-};
-const getMyLessons = async (
-  req,
-  res
-) => {
-  try {
-    const result =
-      await lessonService.getLessonsByEmail(
-        req.user.email
-      );
-
-    res.send(result);
-  } catch (error) {
-    res.status(500).send({
-      message: error.message,
-    });
+    res.status(500).send({ message: error.message });
   }
 };
 
-const likeLesson = async (
-  req,
-  res
-) => {
+const getFeaturedLessons = async (req, res) => {
   try {
-    const result =
-      await lessonService.toggleLike(
-        req.params.id,
-        req.user.email
-      );
-
+    const result = await lessonService.getFeaturedLessons();
     res.send(result);
   } catch (error) {
-    res.status(500).send({
-      message: error.message,
-    });
+    res.status(500).send({ message: error.message });
   }
 };
 
-const getSimilarLessons = async (
-  req,
-  res
-) => {
+const getMostSavedLessons = async (req, res) => {
   try {
-    const lesson =
-      await lessonService.getLessonById(
-        req.params.id
-      );
-
-    const result =
-      await lessonService.getSimilarLessons(
-        lesson.category,
-        lesson.emotionalTone,
-        lesson._id
-      );
-
+    const result = await lessonService.getMostSavedLessons();
     res.send(result);
   } catch (error) {
-    res.status(500).send({
-      message: error.message,
+    res.status(500).send({ message: error.message });
+  }
+};
+
+const getTopContributors = async (req, res) => {
+  try {
+    const result = await lessonService.getTopContributors();
+    res.send(result);
+  } catch (error) {
+    res.status(500).send({ message: error.message });
+  }
+};
+
+const getMyLessons = async (req, res) => {
+  try {
+    const { email } = req.params;
+    const result = await lessonService.getMyLessons(email);
+    res.send(result);
+  } catch (error) {
+    res.status(500).send({ message: error.message });
+  }
+};
+
+const getRecommendedLessons = async (req, res) => {
+  try {
+    const lesson = await lessonService.getLessonById(req.params.id);
+
+    if (!lesson) {
+      return res.status(404).send({
+        message: "Lesson not found",
+      });
+    }
+
+    const result = await lessonService.getRecommendedLessons(lesson);
+    res.send(result);
+  } catch (error) {
+    res.status(500).send({ message: error.message });
+  }
+};
+
+const toggleLike = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).send({
+        message: "Email is required",
+      });
+    }
+
+    const result = await lessonService.toggleLike(req.params.id, email);
+
+    if (!result) {
+      return res.status(404).send({
+        message: "Lesson not found",
+      });
+    }
+
+    res.send({
+      success: true,
+      message: "Like updated",
+      result,
     });
+  } catch (error) {
+    res.status(500).send({ message: error.message });
   }
 };
 
@@ -244,7 +227,10 @@ module.exports = {
   createLesson,
   updateLesson,
   deleteLesson,
+  getFeaturedLessons,
+  getMostSavedLessons,
+  getTopContributors,
   getMyLessons,
-likeLesson,
-getSimilarLessons,
+  getRecommendedLessons,
+  toggleLike,
 };

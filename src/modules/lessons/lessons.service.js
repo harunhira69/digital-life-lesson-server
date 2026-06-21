@@ -4,6 +4,9 @@ const { client } = require("../../config/db");
 const lessonCollection = () =>
   client.db("digital_life_lesson").collection("public_lesson");
 
+const usersCollection = () =>
+  client.db("digital_life_lesson").collection("users");
+
 const getPublicLessons = async (query, options) => {
   return await lessonCollection()
     .find(query)
@@ -29,12 +32,8 @@ const createLesson = async (payload) => {
 
 const updateLesson = async (id, payload) => {
   return await lessonCollection().updateOne(
-    {
-      _id: new ObjectId(id),
-    },
-    {
-      $set: payload,
-    }
+    { _id: new ObjectId(id) },
+    { $set: payload }
   );
 };
 
@@ -43,84 +42,118 @@ const deleteLesson = async (id) => {
     _id: new ObjectId(id),
   });
 };
-const getLessonsByEmail = async (
-  email
-) => {
+
+const getFeaturedLessons = async () => {
   return await lessonCollection()
     .find({
-      creatorEmail: email,
+      visibility: "Public",
     })
     .sort({
+      likesCount: -1,
+      viewsCount: -1,
       createdDate: -1,
     })
+    .limit(6)
     .toArray();
 };
 
-const toggleLike = async (
-  lessonId,
-  userEmail
-) => {
-  const lesson =
-    await lessonCollection().findOne({
-      _id: new ObjectId(lessonId),
-    });
+const getMostSavedLessons = async () => {
+  return await lessonCollection()
+    .find({
+      visibility: "Public",
+    })
+    .sort({
+      favoritesCount: -1,
+      savesCount: -1,
+      createdDate: -1,
+    })
+    .limit(6)
+    .toArray();
+};
+
+const getTopContributors = async () => {
+  return await lessonCollection()
+    .aggregate([
+      {
+        $match: {
+          visibility: "Public",
+        },
+      },
+      {
+        $group: {
+          _id: "$creatorEmail",
+          creatorName: { $first: "$creatorName" },
+          creatorPhotoUrl: { $first: "$creatorPhotoUrl" },
+          totalLessons: { $sum: 1 },
+          totalLikes: { $sum: "$likesCount" },
+          totalFavorites: { $sum: "$favoritesCount" },
+        },
+      },
+      {
+        $sort: {
+          totalLessons: -1,
+          totalLikes: -1,
+        },
+      },
+      {
+        $limit: 6,
+      },
+    ])
+    .toArray();
+};
+
+const getMyLessons = async (email) => {
+  return await lessonCollection()
+    .find({
+      $or: [{ creatorEmail: email }, { email }],
+    })
+    .sort({ createdDate: -1 })
+    .toArray();
+};
+
+const getRecommendedLessons = async (lesson) => {
+  return await lessonCollection()
+    .find({
+      _id: { $ne: lesson._id },
+      visibility: "Public",
+      $or: [
+        { category: lesson.category },
+        { emotionalTone: lesson.emotionalTone },
+      ],
+    })
+    .limit(6)
+    .toArray();
+};
+
+const findUserByEmail = async (email) => {
+  return await usersCollection().findOne({ email });
+};
+
+const toggleLike = async (lessonId, email) => {
+  const lesson = await getLessonById(lessonId);
 
   if (!lesson) return null;
 
   const likes = lesson.likes || [];
-
-  const alreadyLiked =
-    likes.includes(userEmail);
+  const alreadyLiked = likes.includes(email);
 
   if (alreadyLiked) {
     return await lessonCollection().updateOne(
+      { _id: new ObjectId(lessonId) },
       {
-        _id: new ObjectId(lessonId),
-      },
-      {
-        $pull: {
-          likes: userEmail,
-        },
-        $inc: {
-          likesCount: -1,
-        },
+        $pull: { likes: email },
+        $inc: { likesCount: -1 },
       }
     );
   }
 
   return await lessonCollection().updateOne(
+    { _id: new ObjectId(lessonId) },
     {
-      _id: new ObjectId(lessonId),
-    },
-    {
-      $addToSet: {
-        likes: userEmail,
-      },
-      $inc: {
-        likesCount: 1,
-      },
+      $addToSet: { likes: email },
+      $inc: { likesCount: 1 },
     }
   );
-};
-
-const getSimilarLessons = async (
-  category,
-  emotionalTone,
-  currentId
-) => {
-  return await lessonCollection()
-    .find({
-      _id: {
-        $ne: new ObjectId(currentId),
-      },
-      visibility: "Public",
-      $or: [
-        { category },
-        { emotionalTone },
-      ],
-    })
-    .limit(6)
-    .toArray();
 };
 
 module.exports = {
@@ -130,7 +163,11 @@ module.exports = {
   createLesson,
   updateLesson,
   deleteLesson,
-  getLessonsByEmail,
-toggleLike,
-getSimilarLessons,
+  getFeaturedLessons,
+  getMostSavedLessons,
+  getTopContributors,
+  getMyLessons,
+  getRecommendedLessons,
+  findUserByEmail,
+  toggleLike,
 };

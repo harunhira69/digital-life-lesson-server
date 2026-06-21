@@ -26,9 +26,7 @@ const createCheckoutSession = async (email, cost) => {
     mode: "payment",
     customer_email: email,
     metadata: { email },
-
     success_url: `${process.env.SITE_DOMAIN}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
-
     cancel_url: `${process.env.SITE_DOMAIN}/payment/cancel`,
   });
 
@@ -36,22 +34,15 @@ const createCheckoutSession = async (email, cost) => {
 };
 
 const verifyPayment = async (sessionId) => {
-  const session =
-    await stripe.checkout.sessions.retrieve(sessionId);
-
-  return session;
+  return await stripe.checkout.sessions.retrieve(sessionId);
 };
 
 const savePayment = async (paymentData) => {
   return await paymentsCollection().insertOne(paymentData);
 };
 
-const getPaymentByTransactionId = async (
-  transactionId
-) => {
-  return await paymentsCollection().findOne({
-    transactionId,
-  });
+const getPaymentByTransactionId = async (transactionId) => {
+  return await paymentsCollection().findOne({ transactionId });
 };
 
 const upgradeUserToPremium = async (email) => {
@@ -73,6 +64,18 @@ const getPayments = async (query) => {
     .toArray();
 };
 
+const createPaymentIndexes = async () => {
+  await paymentsCollection().createIndex(
+    { transactionId: 1 },
+    { unique: true }
+  );
+
+  await paymentsCollection().createIndex(
+    { sessionId: 1 },
+    { unique: true }
+  );
+};
+
 module.exports = {
   createCheckoutSession,
   verifyPayment,
@@ -80,4 +83,5 @@ module.exports = {
   getPaymentByTransactionId,
   upgradeUserToPremium,
   getPayments,
+  createPaymentIndexes,
 };
