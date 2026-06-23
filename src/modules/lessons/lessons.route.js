@@ -1,19 +1,30 @@
 const express = require("express");
 const router = express.Router();
 
-const lessonController = require(
-  "./lessons.controller"
-);
+const lessonController = require("./lessons.controller");
 
-const verifyToken = require(
-  "../../middleware/verifyToken"
-);
-
+// Special routes must come before "/:id"
 router.get(
   "/public-lessons",
   lessonController.getPublicLessons
 );
 
+router.get(
+  "/featured-lessons",
+  lessonController.getFeaturedLessons
+);
+
+router.get(
+  "/top-contributors",
+  lessonController.getTopContributors
+);
+
+router.get(
+  "/most-saved-lessons",
+  lessonController.getMostSavedLessons
+);
+
+// Dynamic id route must stay after special routes
 router.get(
   "/:id",
   lessonController.getLessonById
